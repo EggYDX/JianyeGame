@@ -2,9 +2,11 @@
 
 [English](README.EN.md)
 
-**[开始游戏](YOUR_GAME_URL)**
+**[开始游戏](https://eggydx.github.io/JianyeGame)**
 
-![空白的创建账号页面](images/registration.png)
+<p align="center">
+  <img src="images/registration.png" width="75%" alt="空白的创建账号页面">
+</p>
 
 你只是想注册「间页」。
 
@@ -73,4 +75,6 @@ pnpm pages
 
 ## License
 
-[MIT](LICENSE)
+本项目的原创代码以 [MIT License](LICENSE) 开源。
+
+项目使用的第三方库、字体、图标及其他依赖可能适用各自的许可证与版权声明，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
