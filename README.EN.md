@@ -2,9 +2,11 @@
 
 [简体中文](README.md)
 
-**[Play](YOUR_GAME_URL)**
+**[Play](https://eggydx.github.io/JianyeGame/)**
 
-![The signup screen with an empty username field](images/registration.png)
+<p align="center">
+  <img src="images/registration.png" width="75%" alt="空白的创建账号页面">
+</p>
 
 You came to Jianye to make an account.
 
@@ -26,10 +28,9 @@ Might as well finish signing up.
 
 ## What you're playing
 
-- One password has to satisfy a growing list of requirements.
+- One password has to satisfy **a growing list of requirements**.
 - Where you put a character can matter as much as what you add.
-- Use the same invitation code to take on the same challenge.
-- The game is in Simplified Chinese and works in desktop and mobile browsers.
+- Use the invitation code someone sent you and experience it for yourself!
 
 ## How to play
 
@@ -75,4 +76,6 @@ Playable from start to finish. Difficulty and phone controls still need more pla
 
 ## License
 
-[MIT](LICENSE)
+Original code in this project is licensed under the [MIT License](LICENSE).
+
+Third-party libraries, fonts, icons, and other dependencies may be subject to their own licenses and copyright notices. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
