@@ -1,0 +1,9 @@
+{
+  "version": "4",
+  "fixtures": {
+    "0": "94f8711191c3f7076d8afbeef43609e80bf542f80972f999d1063804d6080d4d",
+    "137": "8aeb697046643bb11f29bf1c53c2bb9462d638addccc0a4dd0cf5692f4a8f548",
+    "registration": "379cc58ae375dd06330569bccc575ffa3781b638bb7bd3afe1909396e8fb4a63",
+    "fallback": "318a4d0b5009edaf6e22916f4882c7dd82f98cdf0987d1ac4f2a409d2671b148"
+  }
+}

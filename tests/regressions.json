@@ -1,0 +1,10 @@
+[
+  {
+    "seed": "0",
+    "issue": "Presence and minimum-length certificates must support whole-category removal and empty alternatives."
+  },
+  {
+    "seed": "registration",
+    "issue": "Keep registration/reveal/resize/undo scenario stable across revisions."
+  }
+]

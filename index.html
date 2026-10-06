@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>间页</title>
+    <script>
+      const game = new URL("./docs/index.html", location.href);
+      game.search = location.search;
+      game.hash = location.hash;
+      location.replace(game.href);
+    </script>
+  </head>
+  <body>
+    <a href="./docs/index.html">进入间页</a>
+  </body>
+</html>
