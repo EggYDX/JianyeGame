@@ -2,7 +2,7 @@
 
 [English](README.EN.md)
 
-**[开始游戏](https://eggydx.github.io/JianyeGame)**
+**[开始游戏](https://eggydx.github.io/JianyeGame/)**
 
 <p align="center">
   <img src="images/registration.png" width="75%" alt="空白的创建账号页面">
@@ -52,13 +52,38 @@ pnpm dev
 
 默认打开 `http://127.0.0.1:5173/dev.html`。
 
-### GitHub Pages 构建
+### 离线构建
 
 ```bash
-pnpm pages
+pnpm build
 ```
 
-构建结果在 `dist/`，同时复制到 `docs/`。打开 `docs/index.html` 就能本地游玩。
+构建结果在 `dist/`。直接打开 `dist/index.html` 就能离线游玩；复制时请保留整个 `dist/` 目录。
+
+### GitHub Pages 发布
+
+仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**。合并到 `main` 后，Pages workflow 从源码构建，上传 `dist/` 并发布到 [线上游戏](https://eggydx.github.io/JianyeGame/)。也可以手动运行该 workflow。构建产物不提交到 Git。
+
+静态资源使用相对路径，支持 `/JianyeGame/` 子路径和 `?seed=...&v=5` 链接。本次内容版本为 5；带旧版本号的链接会显示“链接已失效”，不会悄悄换成另一局。旧版本进度与新版本分开保存。
+
+## 关于输入的密码
+
+JianyeGame 是密码谜题游戏，请不要输入现实中正在使用的真实密码。游戏逻辑在浏览器本地执行；为恢复当前进度，账户名和游戏输入可能暂存在当前浏览器会话的 `sessionStorage` 中。
+
+## 工程与测试
+
+谜题由邀请码和内容版本确定性生成，并在交给玩家前验证可完成性。页面沿用 reducer 管理流程，后台 worker 准备谜题，页面步骤与规则动画分别维护。项目包含 unit、property 与 browser E2E tests。
+
+```bash
+pnpm test
+pnpm test:quick
+pnpm test:generation
+pnpm build
+pnpm test:e2e
+pnpm format:check
+```
+
+PR 会运行格式、类型/构建、单元与性质测试、快速生成 corpus 和 Chromium 浏览器冒烟测试。`main` 与手动 CI 还运行 Chromium、Firefox、WebKit 完整浏览器测试。本地 `pnpm test:e2e` 保留 Chrome、Edge、Firefox、WebKit，需安装对应浏览器；CI 使用 Playwright 官方浏览器。生成平衡报告写入 `reports/generation.json`，不会进入 Git。
 
 ## 技术栈
 

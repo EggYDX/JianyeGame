@@ -10,6 +10,12 @@ export type Predicate =
   | { kind: "forbid"; text: string }
   | { kind: "sequence"; direction: 1 | -1; size: number }
   | { kind: "boundary"; position: number | "last"; category: Category }
+  | {
+      kind: "relativePosition";
+      code: string;
+      side: "before" | "after";
+      category: Category;
+    }
   | { kind: "repeat"; category: Category; size: number }
   | { kind: "sum"; value: number }
   | { kind: "wrapped"; options: string[]; pair: [string, string] }

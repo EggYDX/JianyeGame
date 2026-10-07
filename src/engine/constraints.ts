@@ -64,6 +64,7 @@ export function mergeConstraint(
       "alternatingParity",
       "distinctDigits",
       "letterSequence",
+      "relativePosition",
     ].includes(p.kind)
   )
     c.relations.push(p);
@@ -103,6 +104,17 @@ export function mergeConstraint(
   if (p.kind === "tokenGap" && (p.min < 0 || p.min > p.max))
     return { context: c, error: "片段间距上下界冲突" };
   for (const relation of c.relations) {
+    if (
+      relation.kind === "relativePosition" &&
+      c.relations.some(
+        (r) =>
+          r.kind === "relativePosition" &&
+          r.code === relation.code &&
+          r.side === relation.side &&
+          r.category !== relation.category,
+      )
+    )
+      return { context: c, error: "片段相邻类别冲突" };
     if (
       relation.kind === "wordOccurrence" &&
       c.relations.some(

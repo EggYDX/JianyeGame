@@ -1,9 +1,9 @@
 {
-  "version": "4",
+  "version": "5",
   "fixtures": {
-    "0": "94f8711191c3f7076d8afbeef43609e80bf542f80972f999d1063804d6080d4d",
-    "137": "8aeb697046643bb11f29bf1c53c2bb9462d638addccc0a4dd0cf5692f4a8f548",
-    "registration": "379cc58ae375dd06330569bccc575ffa3781b638bb7bd3afe1909396e8fb4a63",
-    "fallback": "318a4d0b5009edaf6e22916f4882c7dd82f98cdf0987d1ac4f2a409d2671b148"
+    "0": "0ecfcb17448e34b6d7b73917f075c6844fdcba03e3ca9e1d84fdaccf91ab6282",
+    "137": "01ecfacae8e2ba2a75b434f853930eaa497d96b7b2d3c2367ee0229f37a4bd12",
+    "registration": "c4a443dd6e7f7a485d843fe492f256013b65d4882b0cec6ff6da7d7b2d94a0e7",
+    "fallback": "646d7796c9cb56bd86082474ab696f78707ec25d50c46fafa21baf61b6568498"
   }
 }

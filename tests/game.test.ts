@@ -8,7 +8,7 @@ import {
 } from "../src/engine/game";
 import { analyzePassword } from "../src/engine/analyzer";
 import corpus from "./corpus.json";
-import { NEW_CHALLENGE_IDS } from "../src/rules/definitions";
+import { HEAVY_DIGIT_IDS, isExactCount } from "../src/rules/definitions";
 const g = generateGame("registration");
 const active = (name = "鱼") =>
   transition(
@@ -48,15 +48,50 @@ describe("first-submit protocol", () => {
   });
   test("length is a seed-selected minimum 15–20; larger structures have room", () => {
     const values = new Set<number>();
-    const additions = new Set<string>();
+    const starters = new Set<string>();
     for (const seed of corpus.slice(0, 12)) {
       const game = generateGame(seed);
-      const added = game.plan.rules.filter((r) =>
-        NEW_CHALLENGE_IDS.has(r.definitionId),
+      const starter = game.plan.rules.filter((r) => r.phase === 0);
+      expect(starter.length).toBeGreaterThanOrEqual(3);
+      expect(starter.length).toBeLessThanOrEqual(4);
+      expect(
+        starter.every((r) =>
+          [
+            "minimum",
+            "basic-digit",
+            "basic-upper",
+            "basic-punctuation",
+            "lower-min",
+            "vowel-min",
+            "repeat",
+          ].includes(r.definitionId),
+        ),
+      ).toBe(true);
+      starters.add(
+        starter
+          .map((r) => r.definitionId)
+          .sort()
+          .join(","),
       );
-      expect(added.length).toBeGreaterThanOrEqual(2);
-      expect(added.length).toBeLessThanOrEqual(3);
-      added.forEach((r) => additions.add(r.definitionId));
+      expect(game.plan.rules.length).toBeGreaterThanOrEqual(15);
+      expect(game.plan.rules.length).toBeLessThanOrEqual(19);
+      expect(game.plan.rules.filter(isExactCount).length).toBeLessThanOrEqual(
+        1,
+      );
+      expect(
+        game.plan.rules.filter((r) => HEAVY_DIGIT_IDS.has(r.definitionId))
+          .length,
+      ).toBeLessThanOrEqual(2);
+      expect(
+        game.plan.rules.some((r) =>
+          ["position", "final-length"].includes(r.definitionId),
+        ),
+      ).toBe(false);
+      expect(
+        game.plan.rules.some(
+          (r) => r.phase === 4 && r.predicate.kind !== "count",
+        ),
+      ).toBe(true);
       const p = game.plan.rules[0].predicate;
       expect(p.kind).toBe("length");
       if (p.kind !== "length") throw new Error("wrong first rule");
@@ -76,7 +111,7 @@ describe("first-submit protocol", () => {
       if (mirror) expect(mirror.predicate).toEqual({ kind: "mirror", size: 3 });
     }
     expect(values.size).toBeGreaterThan(1);
-    expect(additions).toEqual(NEW_CHALLENGE_IDS);
+    expect(starters.size).toBeGreaterThan(3);
   });
   test("no requirements or advance before first submit, even with a full solution", () => {
     let s = transition(active(), { type: "input", raw: g.witness, now: 0 });

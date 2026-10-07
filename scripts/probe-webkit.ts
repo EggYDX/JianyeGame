@@ -1,14 +1,15 @@
 import { webkit } from "@playwright/test";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { CONTENT_VERSION } from "../src/data/materials";
 const browser = await webkit.launch();
 const base = pathToFileURL(resolve("dist/index.html")).href;
 for (const offline of [true, false]) {
   const context = await browser.newContext({ offline });
   for (const suffix of [
     "",
-    "?seed=registration&v=2",
-    "#seed=registration&v=2",
+    `?seed=registration&v=${CONTENT_VERSION}`,
+    `#seed=registration&v=${CONTENT_VERSION}`,
   ]) {
     const page = await context.newPage();
     try {

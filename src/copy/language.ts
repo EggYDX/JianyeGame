@@ -30,6 +30,8 @@ export function describe(p: Predicate, _variant = 0): string {
       return `${p.position === "last" ? "最后一个" : `第 ${p.position} 个`}字符是${CATEGORY_NAMES[p.category as Category]}。`;
     case "repeat":
       return `包含连续 ${p.size} 个相同的${CATEGORY_NAMES[p.category]}。`;
+    case "relativePosition":
+      return `最先出现的「${p.code}」${p.side === "before" ? "前" : "后"}紧挨着一个${CATEGORY_NAMES[p.category]}。`;
     case "sum":
       return `每一位数字相加，结果为 ${p.value}。`;
     case "wrapped":

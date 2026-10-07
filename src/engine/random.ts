@@ -1,6 +1,6 @@
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
 import { uniformInt } from "pure-rand/distribution/uniformInt";
-import { GENERATION_VERSION } from "../data/materials";
+import { CONTENT_VERSION } from "../data/materials";
 function hash(text: string): number {
   let h = 2166136261;
   for (const byte of new TextEncoder().encode(text)) {
@@ -12,9 +12,7 @@ function hash(text: string): number {
 export class SeededRandom {
   private rng;
   constructor(seed: string, stream: string) {
-    this.rng = xoroshiro128plus(
-      hash(`${GENERATION_VERSION}|${seed}|${stream}`),
-    );
+    this.rng = xoroshiro128plus(hash(`${CONTENT_VERSION}|${seed}|${stream}`));
   }
   int(min: number, max: number) {
     return uniformInt(this.rng, min, max);

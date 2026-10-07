@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+const ci = !!process.env.CI;
 export default defineConfig({
   testDir: "./tests/browser",
   timeout: 45000,
@@ -22,11 +23,18 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    {
-      name: "chrome",
-      use: { ...devices["Desktop Chrome"], channel: "chrome" },
-    },
-    { name: "edge", use: { ...devices["Desktop Chrome"], channel: "msedge" } },
+    ...(ci
+      ? [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }]
+      : [
+          {
+            name: "chrome",
+            use: { ...devices["Desktop Chrome"], channel: "chrome" },
+          },
+          {
+            name: "edge",
+            use: { ...devices["Desktop Chrome"], channel: "msedge" },
+          },
+        ]),
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
     // Windows WebKit's offline emulation rejects file: navigation itself.
     // Remote HTTP(S) is blocked by the test fixture instead.

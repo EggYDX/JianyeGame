@@ -15,6 +15,13 @@ function* mutations(
   // Whole-category changes are needed to certify basic presence requirements.
   yield s.replace(/[0-9]/g, "x");
   yield s.toLowerCase();
+  yield s.toUpperCase();
+  // Keep a lowercase pair when certifying a larger lowercase minimum.
+  const repeated = s.match(/([a-z])\1/);
+  if (repeated)
+    yield s.toUpperCase().slice(0, repeated.index) +
+      repeated[0] +
+      s.toUpperCase().slice(repeated.index! + repeated[0].length);
   yield s.replace(/[\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/g, "x");
   yield s.replace(/[aeiouAEIOU]/g, "x");
   for (const option of w.options)
@@ -28,7 +35,14 @@ function* mutations(
       s.slice(start, end) +
       s.slice(end, codeStart) +
       s.slice(codeStart + w.code.length);
+    // Moving the wrapped word beyond all digits also preserves digit-gap.
+    yield s.slice(0, start) +
+      s.slice(end, -3) +
+      s.slice(start, end) +
+      s.slice(-3);
   }
+  if (p.kind === "repeat")
+    yield s.replace(/([a-z])\1/g, (_, c: string) => c + c.toUpperCase());
   if (p.kind === "wrapped") {
     yield s.replace(w.pair[0], "!");
     yield s.replace(w.pair[1], "!");
@@ -56,6 +70,8 @@ function* mutations(
   }
   if (p.kind === "tokenGap") {
     const index = s.indexOf(w.code);
+    // Widen the bridge without touching the word's brackets or code adjacency.
+    yield s.slice(0, index - 2) + "鱼".repeat(p.max + 1) + s.slice(index - 2);
     yield s.slice(0, index) + "鱼".repeat(p.max + 1) + s.slice(index);
     const word = analyzePassword(s).matches(p.options, false)[0];
     if (word) yield s.slice(0, word.end) + s.slice(index);
@@ -63,6 +79,10 @@ function* mutations(
   if (p.kind === "split") {
     yield s.replace(w.marker, "!");
     yield s.slice(0, -2) + w.marker + s.slice(-2);
+  }
+  if (p.kind === "relativePosition") {
+    const index = s.indexOf(p.code) + (p.side === "after" ? p.code.length : 0);
+    yield s.slice(0, index) + "鱼" + s.slice(index);
   }
   const preferred =
     p.kind === "count"

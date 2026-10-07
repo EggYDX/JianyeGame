@@ -41,7 +41,7 @@ const count = (
   def({
     id,
     family: "count",
-    phases: [phase],
+    phases: phase === 1 ? [0, 1] : [phase],
     weight: 3,
     difficulty: 2,
     reads: [category, "length"],
@@ -125,7 +125,7 @@ export const DEFINITIONS: RuleDefinition[] = [
   def({
     id: "repeat",
     family: "sequence",
-    phases: [1],
+    phases: [0, 1],
     weight: 3,
     difficulty: 2,
     reads: ["lower", "characters"],
@@ -205,7 +205,7 @@ export const DEFINITIONS: RuleDefinition[] = [
   def({
     id: "split-sum",
     family: "segment-arithmetic",
-    phases: [3],
+    phases: [3, 4],
     weight: 6,
     difficulty: 4,
     reads: ["digit", "sum", "punctuation"],
@@ -222,7 +222,7 @@ export const DEFINITIONS: RuleDefinition[] = [
   def({
     id: "balance",
     family: "relational",
-    phases: [3],
+    phases: [3, 4],
     weight: 6,
     difficulty: 4,
     reads: ["upper", "digit", "vowel", "punctuation"],
@@ -246,24 +246,27 @@ export const DEFINITIONS: RuleDefinition[] = [
     instantiate: () => ({ kind: "digitGap" }),
   }),
   def({
-    id: "position",
-    family: "position",
-    phases: [3],
-    weight: 3,
-    difficulty: 3,
-    reads: ["position", "upper", "lower", "digit"],
-    instantiate: (w, r) => {
-      const a = analyzePassword(w.text),
-        position = r.int(
-          Math.ceil(a.graphemes.length * 0.35),
-          Math.floor(a.graphemes.length * 0.75),
-        );
-      return {
-        kind: "boundary",
-        position,
-        category: a.categories[position - 1],
-      };
-    },
+    id: "relative-position",
+    family: "local-adjacency",
+    phases: [2, 3, 4],
+    weight: 4,
+    difficulty: 2,
+    reads: ["code", "position", "lower", "digit"],
+    requires: ["code"],
+    instantiate: (w, r) =>
+      r.int(0, 1)
+        ? {
+            kind: "relativePosition",
+            code: w.code,
+            side: "before",
+            category: "lower",
+          }
+        : {
+            kind: "relativePosition",
+            code: w.code,
+            side: "after",
+            category: "digit",
+          },
   }),
   def({
     id: "mirror",
@@ -330,7 +333,7 @@ export const DEFINITIONS: RuleDefinition[] = [
     weight: 4,
     difficulty: 3,
     reads: ["tokens", "code", "position", "length"],
-    requires: ["word", "code"],
+    requires: ["word", "code", "material-order"],
     instantiate: (w, r) => ({
       kind: "tokenGap",
       options: w.options,
@@ -362,15 +365,17 @@ export const DEFINITIONS: RuleDefinition[] = [
     }),
   }),
 ];
-export const NEW_CHALLENGE_IDS = new Set([
-  "letter-run",
-  "different-digits",
-  "word-once",
-  "paired-brackets",
-  "material-gap",
-  "digit-parity",
-]);
 export const REGISTRY = new Map(DEFINITIONS.map((d) => [d.id, d]));
+export const HEAVY_DIGIT_IDS = new Set([
+  "digit-sum",
+  "digit-run",
+  "different-digits",
+  "split-sum",
+  "digit-parity",
+  "digit-exact",
+]);
+export const isExactCount = (r: RuleInstance) =>
+  r.predicate.kind === "count" && r.predicate.op === "exact";
 export const evaluateRules = (rules: RuleInstance[], raw: string) => {
   const a = analyzePassword(raw);
   return { analysis: a, results: rules.map((r) => validateRule(r, a)) };

@@ -4,6 +4,7 @@ import {
   syncAssistance,
   checkAssistance,
   assistanceDueAt,
+  assistanceProgress,
 } from "../src/engine/assistance";
 const started = () => syncAssistance(createAssistance(0), 257, true, 0);
 test("offer appears only after two active minutes", () => {
@@ -18,7 +19,7 @@ test("editing, regressing and repairing do not reset the best progress clock", (
   expect(assistanceDueAt(s)).toBe(120000);
   expect(checkAssistance(s, 120000).offered).toBe(true);
 });
-test("a new best prefix restarts the clock and re-enables a declined offer", () => {
+test("a new best passed count restarts the clock and re-enables a declined offer", () => {
   const s = syncAssistance(
     { ...started(), declined: true, offered: true },
     258,
@@ -28,6 +29,41 @@ test("a new best prefix restarts the clock and re-enables a declined offer", () 
   expect(s.elapsed).toBe(0);
   expect(s.declined).toBe(false);
   expect(s.offered).toBe(false);
+  expect(assistanceDueAt(s)).toBe(180000);
+});
+
+test("solving a non-prefix rule is progress, and regressions never move progress back", () => {
+  const results = (passed: boolean[]) => passed.map((passed) => ({ passed }));
+  let s = syncAssistance(
+    createAssistance(0),
+    assistanceProgress(4, results([true, false, false, false])),
+    true,
+    0,
+  );
+  s = { ...s, declined: true };
+  s = syncAssistance(
+    s,
+    assistanceProgress(4, results([true, false, false, true])),
+    true,
+    60000,
+  );
+  expect(s.elapsed).toBe(0);
+  expect(s.declined).toBe(false);
+  expect(assistanceDueAt(s)).toBe(180000);
+  const best = s.score;
+  s = syncAssistance(
+    s,
+    assistanceProgress(4, results([false, false, false, false])),
+    true,
+    70000,
+  );
+  s = syncAssistance(
+    s,
+    assistanceProgress(4, results([true, false, false, true])),
+    true,
+    80000,
+  );
+  expect(s.score).toBe(best);
   expect(assistanceDueAt(s)).toBe(180000);
 });
 test("background or a modal pauses elapsed time, including stale timer callbacks", () => {
