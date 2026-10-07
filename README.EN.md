@@ -64,17 +64,17 @@ The build goes into `dist/`. Open `dist/index.html` directly to play offline; ke
 
 ### GitHub Pages deployment
 
-Select **GitHub Actions** under the repository's **Settings → Pages → Source**. After a merge to `main`, the Pages workflow builds from source, uploads `dist/`, and publishes the [live game](https://eggydx.github.io/JianyeGame/). It also supports manual runs. Build artifacts are not committed to Git.
+In the repository's **Settings → Pages**, choose **GitHub Actions** under **Source**. GitHub will publish the [game](https://eggydx.github.io/JianyeGame/) automatically whenever `main` is updated.
 
-Relative asset paths support `/JianyeGame/` and `?seed=...&v=5` links. This release uses content version 5. Links with older versions display “链接已失效” (link expired) instead of silently changing the challenge. Progress is stored separately for each content version.
+To publish again, go to **Actions → Deploy GitHub Pages** and click **Run workflow**.
 
 ## About the password you enter
 
 JianyeGame is a password puzzle game. Do not enter a real password you currently use elsewhere. The game logic runs locally in the browser. To restore progress, the username and game input may be temporarily stored in the current browser session's `sessionStorage`.
 
-## Engineering and tests
+## Development and tests
 
-Invitation codes and content versions determine the puzzles, whose solvability is checked before play. A reducer manages the flow, a background worker prepares the puzzle, and page steps and rule animations have separate responsibilities. The project includes unit, property, and browser E2E tests.
+The invitation code determines the puzzle, which is checked for a solution before play. The project includes unit, property, and browser tests.
 
 ```bash
 pnpm test
@@ -85,7 +85,9 @@ pnpm test:e2e
 pnpm format:check
 ```
 
-PR checks cover formatting, types/build, unit and property tests, a quick generation corpus, and Chromium browser smoke tests. CI on `main` and manual runs also execute the full Chromium, Firefox, and WebKit suites. Local `pnpm test:e2e` retains Chrome, Edge, Firefox, and WebKit; install the corresponding browsers first. CI uses Playwright's official browsers. Generation balance reports go to `reports/generation.json` and are excluded from Git.
+For each pull request, GitHub checks code formatting, the build, unit and property tests, and a small set of Chromium browser tests. After a merge to `main`, it also runs the full browser tests in Chromium, Firefox, and WebKit.
+
+Local browser tests support Chrome, Edge, Firefox, and WebKit; install the corresponding browsers first. Generation test results are saved in `reports/generation.json`.
 
 ## Built with
 
