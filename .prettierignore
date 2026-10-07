@@ -1,0 +1,11 @@
+node_modules/
+dist/
+docs/
+reports/
+test-results/
+playwright-report/
+pnpm-lock.yaml
+licenses/
+LICENSE
+THIRD_PARTY_NOTICES.md
+images/

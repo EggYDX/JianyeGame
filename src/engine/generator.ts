@@ -2,7 +2,8 @@ import { CONTENT_VERSION } from "../data/materials";
 import {
   DEFINITIONS,
   REGISTRY,
-  NEW_CHALLENGE_IDS,
+  HEAVY_DIGIT_IDS,
+  isExactCount,
   type RuleDefinition,
 } from "../rules/definitions";
 import { validateRule } from "../rules/validate";
@@ -107,30 +108,49 @@ export function generateGame(
       });
       return true;
     };
-    for (const id of [
-      "minimum",
-      "basic-digit",
-      "basic-upper",
-      "basic-punctuation",
-    ])
-      if (!accept(REGISTRY.get(id)!, 0)) failed = true;
-    const budgets = [
-      0,
-      structure.int(7, 9),
-      structure.int(8, 10),
-      structure.int(10, 13),
-      structure.int(6, 8),
+    const targets = [
+      structure.int(3, 4),
+      4,
+      4,
+      structure.int(3, 4),
+      structure.int(1, 2),
     ];
-    const newCount = () =>
-      rules.filter((r) => NEW_CHALLENGE_IDS.has(r.definitionId)).length;
-    const additionTarget = structure.int(2, 3);
+    if (!accept(REGISTRY.get("minimum")!, 0)) failed = true;
+    for (const d of selection.shuffle(
+      DEFINITIONS.filter((d) => d.phases.includes(0) && d.id !== "minimum"),
+    )) {
+      if (rules.length === targets[0]) break;
+      accept(d, 0);
+    }
+    if (rules.length !== targets[0]) failed = true;
+    // These materials support the later local and structural relationships.
+    for (const id of ["word", "code"])
+      if (!accept(REGISTRY.get(id)!, 1)) failed = true;
+    const allowed = (d: RuleDefinition) => {
+      if (
+        HEAVY_DIGIT_IDS.has(d.id) &&
+        rules.filter((r) => HEAVY_DIGIT_IDS.has(r.definitionId)).length >= 2
+      )
+        return false;
+      if (d.id.endsWith("-exact") && rules.some(isExactCount)) return false;
+      const inventory = (family: string) =>
+        family === "count" || family === "material-frequency";
+      if (
+        inventory(d.family) &&
+        rules.filter((r) => inventory(r.family)).length >= 3
+      )
+        return false;
+      return (
+        d.family === "composition" ||
+        inventory(d.family) ||
+        rules.filter((r) => r.family === d.family).length < 2
+      );
+    };
     for (const phase of [1, 2, 3, 4] as Phase[]) {
-      let spent = 0,
-        candidates = 0;
+      let candidates = 0;
       const rejected = new Set<string>();
       while (
-        spent < budgets[phase] &&
-        rules.length < 23 &&
+        rules.filter((r) => r.phase === phase).length < targets[phase] &&
         candidates < (fallback ? 32 : (options.candidateBudget ?? 32))
       ) {
         const pool = DEFINITIONS.filter(
@@ -138,39 +158,33 @@ export function generateGame(
             d.phases.includes(phase) &&
             d.id !== "final-length" &&
             !used.has(d.id) &&
-            (!NEW_CHALLENGE_IDS.has(d.id) ||
-              newCount() < Math.min(phase, additionTarget)) &&
+            allowed(d) &&
+            // The final stage always opens with a relationship, never a stock count.
+            (phase !== 4 ||
+              rules.some((r) => r.phase === 4) ||
+              d.family !== "count") &&
             !rejected.has(d.id) &&
             (!d.requires || d.requires.every((id) => used.has(id))),
         );
         if (!pool.length) break;
-        // Reserve one approachable addition in each of the first two middle stages.
-        const additions = pool.filter((d) => NEW_CHALLENGE_IDS.has(d.id));
-        const choices =
-          phase <= 3 &&
-          newCount() < Math.min(phase, additionTarget) &&
-          additions.length
-            ? additions
-            : pool;
         const selected = fallback
-          ? choices[0]
-          : selection.weighted(choices, (d) => d.weight);
+          ? pool[0]
+          : selection.weighted(pool, (d) => d.weight);
         candidates++;
-        if (accept(selected, phase)) spent += selected.difficulty;
-        else rejected.add(selected.id);
+        if (!accept(selected, phase)) rejected.add(selected.id);
       }
-      if (spent < (phase === 3 ? 6 : phase === 4 ? 4 : 5)) failed = true;
+      // Targets are ceilings: a coherent shorter phase need not discard a valid plan.
+      if (rules.filter((r) => r.phase === phase).length < (phase === 4 ? 1 : 3))
+        failed = true;
     }
-    if (!accept(REGISTRY.get("final-length")!, 4)) failed = true;
-    if (rules.length < 18 || rules.length > 24) failed = true;
-    if (newCount() !== additionTarget) failed = true;
+    if (rules.length < 15 || rules.length > 19) failed = true;
     if (failed) {
       trace.push({
         definition: "complete-plan",
         phase: 4,
         attempt: construction,
         accepted: false,
-        reason: "阶段预算或完整长度未满足",
+        reason: "阶段数量或完整长度未满足",
       });
       continue;
     }

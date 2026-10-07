@@ -58,6 +58,14 @@ export function validatePredicate(p: Predicate, a: Analysis): RuleResult {
       fragments = a.graphemes[i] ? [a.graphemes[i]] : [];
       break;
     }
+    case "relativePosition": {
+      const code = a.matches([p.code])[0];
+      const i = code ? (p.side === "before" ? code.start - 1 : code.end) : -1;
+      passed = i >= 0 && a.categories[i] === p.category;
+      fragments = a.graphemes[i] ? [a.graphemes[i]] : [];
+      detail = fragments.length ? `「${fragments[0]}」` : "—";
+      break;
+    }
     case "repeat": {
       for (let i = 0; i <= a.graphemes.length - p.size; i++)
         if (

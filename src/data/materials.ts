@@ -1,6 +1,4 @@
-export const CONTENT_VERSION = "4";
-// This release changes copy while keeping the existing seeded puzzles.
-export const GENERATION_VERSION = "3";
+export const CONTENT_VERSION = "5";
 export const WORDS = [
   "river",
   "cloud",
@@ -14,6 +12,34 @@ export const WORDS = [
   "night",
   "amber",
   "grove",
+  "apple",
+  "beach",
+  "bloom",
+  "bread",
+  "brush",
+  "chair",
+  "charm",
+  "chess",
+  "clear",
+  "dream",
+  "earth",
+  "flame",
+  "grass",
+  "green",
+  "honey",
+  "light",
+  "music",
+  "ocean",
+  "olive",
+  "peach",
+  "plant",
+  "plume",
+  "shore",
+  "smile",
+  "spark",
+  "sweet",
+  "water",
+  "wheat",
 ] as const;
 export const PAIRS: [string, string][] = [
   ["[", "]"],

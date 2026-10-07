@@ -1,4 +1,9 @@
 export const STALL_MS = 120_000;
+// Each reveal dominates the pass count; syncAssistance retains the historical best.
+export const assistanceProgress = (
+  revealed: number,
+  results: { passed: boolean }[],
+) => revealed * 257 + results.filter((r) => r.passed).length;
 export interface AssistanceState {
   score: number;
   active: boolean;

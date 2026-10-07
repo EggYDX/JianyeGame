@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { CONTENT_VERSION } from "../src/data/materials";
-import { NEW_CHALLENGE_IDS } from "../src/rules/definitions";
+import { HEAVY_DIGIT_IDS, isExactCount } from "../src/rules/definitions";
 import corpus from "../tests/corpus.json";
 import regressions from "../tests/regressions.json";
 import { generateGame } from "../src/engine/generator";
@@ -47,6 +47,10 @@ let fallback = 0,
   completed = 0;
 const families: Record<string, number> = {},
   combinations = new Set<string>(),
+  starters: Record<string, number> = {},
+  firstRules: Record<string, number> = {},
+  phaseDistribution: Record<string, number> = {},
+  ruleFrequency: Record<string, number> = {},
   cases: {
     seed: string;
     ms: number;
@@ -54,7 +58,12 @@ const families: Record<string, number> = {},
     attempts: number;
     initialMinimum: number;
     witnessLength: number;
-    newChallenges: string[];
+    starter: string[];
+    phases: number[];
+    exactCount: number;
+    heavyDigit: number;
+    relativePosition: boolean;
+    fallback: boolean;
   }[] = [];
 mkdirSync("reports", { recursive: true });
 for (const seed of seeds) {
@@ -89,6 +98,39 @@ for (const seed of seeds) {
       )
         throw new Error(`Contribution failed at ${r.id}`);
       families[r.family] = (families[r.family] ?? 0) + 1;
+      ruleFrequency[r.definitionId] = (ruleFrequency[r.definitionId] ?? 0) + 1;
+    });
+    const rules = generated.plan.rules;
+    const starter = rules
+      .filter((r) => r.phase === 0)
+      .map((r) => r.definitionId);
+    const phases = [0, 1, 2, 3, 4].map(
+      (phase) => rules.filter((r) => r.phase === phase).length,
+    );
+    const exactCount = rules.filter(isExactCount).length;
+    const heavyDigit = rules.filter((r) =>
+      HEAVY_DIGIT_IDS.has(r.definitionId),
+    ).length;
+    if (
+      rules.length < 15 ||
+      rules.length > 19 ||
+      starter.length < 3 ||
+      starter.length > 4 ||
+      rules[0].definitionId !== "minimum" ||
+      exactCount > 1 ||
+      heavyDigit > 2 ||
+      rules.some((r) =>
+        ["position", "final-length"].includes(r.definitionId),
+      ) ||
+      !rules.some((r) => r.phase === 4 && r.predicate.kind !== "count")
+    )
+      throw new Error("Gameplay balance invariant failed");
+    const starterKey = [...starter].sort().join(",");
+    starters[starterKey] = (starters[starterKey] ?? 0) + 1;
+    firstRules[rules[0].definitionId] =
+      (firstRules[rules[0].definitionId] ?? 0) + 1;
+    phases.forEach((n, phase) => {
+      phaseDistribution[phase] = (phaseDistribution[phase] ?? 0) + n;
     });
     cases.push({
       seed,
@@ -100,9 +142,14 @@ for (const seed of seeds) {
           ? generated.plan.rules[0].predicate.value
           : -1,
       witnessLength: a.graphemes.length,
-      newChallenges: generated.plan.rules
-        .filter((r) => NEW_CHALLENGE_IDS.has(r.definitionId))
-        .map((r) => r.definitionId),
+      starter,
+      phases,
+      exactCount,
+      heavyDigit,
+      relativePosition: rules.some(
+        (r) => r.definitionId === "relative-position",
+      ),
+      fallback: generated.fallback,
     });
     combinations.add(generated.plan.rules.map((r) => r.definitionId).join(","));
     if (generated.fallback) fallback++;
@@ -163,6 +210,21 @@ if (!process.exitCode) {
     fallback,
     uniqueCombinations: combinations.size,
     families,
+    starters,
+    uniqueStarterSets: Object.keys(starters).length,
+    firstRules,
+    phaseDistribution,
+    ruleFrequency,
+    relativePositionFrequency:
+      (ruleFrequency["relative-position"] ?? 0) / completed,
+    // v5 adds local adjacency; historical additions have no production selection bias.
+    puzzleFrequency: {
+      "relative-position": ruleFrequency["relative-position"] ?? 0,
+    },
+    maxExactCount: Math.max(...cases.map((c) => c.exactCount)),
+    maxHeavyDigit: Math.max(...cases.map((c) => c.heavyDigit)),
+    meanAttempts: cases.reduce((sum, c) => sum + c.attempts, 0) / completed,
+    maxAttempts: Math.max(...cases.map((c) => c.attempts)),
     elapsedMs: performance.now() - start,
     p95Ms: sorted[Math.ceil(sorted.length * 0.95) - 1],
     maxMs: sorted.at(-1),
@@ -178,6 +240,8 @@ if (!process.exitCode) {
       p95Ms: Math.round(report.p95Ms),
       maxMs: Math.round(report.maxMs!),
       uniqueCombinations: combinations.size,
+      uniqueStarterSets: report.uniqueStarterSets,
+      meanAttempts: report.meanAttempts,
       fallback,
     }),
   );

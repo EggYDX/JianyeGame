@@ -275,8 +275,12 @@ describe("determinism, contribution and fallback", () => {
       forceFallback: true,
     });
     expect(g.fallback).toBe(true);
-    expect(g.plan.rules.length).toBeGreaterThanOrEqual(18);
+    expect(g.plan.rules.length).toBeGreaterThanOrEqual(15);
+    expect(g.plan.rules.length).toBeLessThanOrEqual(19);
     expect(g.contributions.length).toBe(g.plan.rules.length);
+    expect(g).toEqual(
+      generateGame("fallback", CONTENT_VERSION, { forceFallback: true }),
+    );
   });
   test("exhausted candidate budget falls back without changing seed", () => {
     const g = generateGame("fallback", CONTENT_VERSION, { candidateBudget: 0 });

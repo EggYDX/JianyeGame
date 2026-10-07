@@ -237,11 +237,15 @@ test("default inspection stays closed; stall clock pauses, decline waits for pro
   await expect(page.locator(".detail-chevron")).toHaveCount(2);
   await page.locator(".rule-content").first().focus();
   await page.keyboard.press("Enter");
-  await expect(page.locator(".rule-detail")).toBeVisible();
+  await expect(
+    page.locator(rows).first().locator(".rule-detail"),
+  ).toBeVisible();
   await page.reload();
   await expect(page.locator(rows)).toHaveCount(2);
   await page.locator(".rule-content").first().click();
-  await expect(page.locator(".rule-detail")).toBeVisible();
+  await expect(
+    page.locator(rows).first().locator(".rule-detail"),
+  ).toBeVisible();
 });
 test("IME and background keep reading intervals; focus alone does not open character dialog", async ({
   page,
@@ -342,7 +346,7 @@ test("zero-reveal draft and unknown version are preserved; five desktop widths s
       });
     }
   }
-  await page.goto(url("registration", "1"));
+  await page.goto(url("registration", "4"));
   await expect(page.getByRole("alert")).toContainText("链接已失效");
 });
 test.describe("touch layout", () => {
@@ -467,7 +471,7 @@ test("input performance with all rules: 50 samples and no long task", async ({
   browser,
 }, info) => {
   test.skip(
-    !["chrome", "edge"].includes(info.project.name),
+    !["chrome", "edge", "chromium"].includes(info.project.name),
     "Chromium Long Task API.",
   );
   const context = await browser.newContext({
@@ -528,7 +532,7 @@ test("input performance with all rules: 50 samples and no long task", async ({
     });
     mkdirSync("reports", { recursive: true });
     writeFileSync(
-      `reports/input-${info.project.name}-v4.json`,
+      `reports/input-${info.project.name}-v${CONTENT_VERSION}.json`,
       JSON.stringify(
         {
           browser: await browser.version(),
@@ -544,4 +548,119 @@ test("input performance with all rules: 50 samples and no long task", async ({
   } finally {
     await context.close();
   }
+});
+
+test("rule order stays fixed and non-prefix progress re-enables assistance", async ({
+  page,
+}) => {
+  await page.clock.install();
+  const wordRule = game.plan.rules.find((r) => r.definitionId === "word")!;
+  const revealed = wordRule.ordinal;
+  await page.addInitScript(
+    ({ key, saved }) => sessionStorage.setItem(key, JSON.stringify(saved)),
+    {
+      key: SESSION_KEY,
+      saved: {
+        seed: "registration",
+        version: CONTENT_VERSION,
+        username: "顺序",
+        raw: "b".repeat(21),
+        revealedCount: revealed,
+        complete: false,
+      },
+    },
+  );
+  await page.goto(url());
+  await expect(page.locator(rows)).toHaveCount(revealed);
+  const ordinals = () =>
+    page
+      .locator(rows)
+      .evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("data-ordinal")),
+      );
+  const expectedOrder = Array.from({ length: revealed }, (_, i) =>
+    String(revealed - i),
+  );
+  expect(await ordinals()).toEqual(expectedOrder);
+  await expect(page.locator('[data-ordinal="1"]')).toHaveAttribute(
+    "data-passed",
+    "true",
+  );
+  await page.clock.runFor(120001);
+  await page.getByRole("button", { name: "查看帮助" }).click();
+  await page.getByRole("button", { name: "暂不需要" }).click();
+  const word = wordRule.predicate;
+  if (word.kind !== "contains") throw new Error("Expected word material");
+  await page
+    .getByLabel("密码", { exact: true })
+    .fill("b".repeat(21) + word.options[0]);
+  await expect(page.locator(`[data-ordinal="${revealed}"]`)).toHaveAttribute(
+    "data-passed",
+    "true",
+  );
+  await expect(page.locator('[data-ordinal="2"]')).toHaveAttribute(
+    "data-passed",
+    "false",
+  );
+  expect(await ordinals()).toEqual(expectedOrder);
+  await expect(page.getByRole("button", { name: "查看帮助" })).toHaveCount(0);
+  await page.clock.runFor(119000);
+  await expect(page.getByRole("button", { name: "查看帮助" })).toHaveCount(0);
+  await page.clock.runFor(1001);
+  await expect(page.getByRole("button", { name: "查看帮助" })).toBeVisible();
+  await page.getByLabel("密码", { exact: true }).fill("");
+  expect(await ordinals()).toEqual(expectedOrder);
+});
+
+test("rule order preserves a scrolled reading anchor when another requirement appears", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 720 });
+  await page.addInitScript(
+    ({ key, saved }) => sessionStorage.setItem(key, JSON.stringify(saved)),
+    {
+      key: SESSION_KEY,
+      saved: {
+        seed: "registration",
+        version: CONTENT_VERSION,
+        username: "阅读",
+        raw: game.witness,
+        revealedCount: 12,
+        complete: false,
+      },
+    },
+  );
+  await page.goto(url());
+  await expect(page.locator(rows)).toHaveCount(12);
+  const anchor = await page.locator(".rule-list").evaluate((list) => {
+    list.scrollTop = 150;
+    const top = list.getBoundingClientRect().top;
+    const row = [...list.querySelectorAll<HTMLElement>("[data-id]")].find(
+      (row) => row.getBoundingClientRect().top >= top,
+    )!;
+    return {
+      id: row.dataset.id!,
+      offset: row.getBoundingClientRect().top - top,
+      scroll: list.scrollTop,
+    };
+  });
+  expect(anchor.scroll).toBeGreaterThan(24);
+  await page.clock.runFor(1601);
+  await expect(page.locator(rows)).toHaveCount(13);
+  await expect(page.getByRole("button", { name: "查看新要求" })).toBeVisible();
+  const offset = await page
+    .locator(`[data-id="${anchor.id}"]`)
+    .evaluate(
+      (row) =>
+        row.getBoundingClientRect().top -
+        row.closest("ol")!.getBoundingClientRect().top,
+    );
+  expect(Math.abs(offset - anchor.offset)).toBeLessThan(2);
+  await page.getByRole("button", { name: "查看新要求" }).click();
+  await expect(page.getByRole("button", { name: "查看新要求" })).toHaveCount(0);
+  expect(
+    await page.locator(".rule-list").evaluate((list) => list.scrollTop),
+  ).toBeLessThan(16);
 });

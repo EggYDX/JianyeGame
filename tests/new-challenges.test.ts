@@ -4,10 +4,15 @@ import { validatePredicate } from "../src/rules/validate";
 import { describe as copy } from "../src/copy/language";
 import { mergeConstraint, emptyContext } from "../src/engine/constraints";
 import { generateGame } from "../src/engine/generator";
-import { DEFINITIONS, NEW_CHALLENGE_IDS } from "../src/rules/definitions";
+import { REGISTRY } from "../src/rules/definitions";
+import fc from "fast-check";
+import { findContribution } from "../src/engine/contribution";
+import { buildWitness } from "../src/engine/witness";
+import { SeededRandom } from "../src/engine/random";
+import type { RuleInstance } from "../src/engine/types";
 import type { Predicate } from "../src/engine/types";
 
-describe("six authored additions", () => {
+describe("authored structural and sequence rules", () => {
   const fixtures: [string, Predicate, string, string][] = [
     [
       "ascending alphabet",
@@ -164,26 +169,132 @@ describe("six authored additions", () => {
     ).not.toBeNull();
   });
   test("all additions are part of the rule registry", () => {
-    expect(
-      new Set(
-        DEFINITIONS.filter((d) => NEW_CHALLENGE_IDS.has(d.id)).map((d) => d.id),
-      ),
-    ).toEqual(NEW_CHALLENGE_IDS);
-    expect(DEFINITIONS).toHaveLength(34);
+    for (const id of [
+      "letter-run",
+      "different-digits",
+      "word-once",
+      "paired-brackets",
+      "material-gap",
+      "digit-parity",
+      "relative-position",
+    ])
+      expect(REGISTRY.has(id)).toBe(true);
   });
   test("full fallback includes compatible additions and preserves its identity", () => {
     const g = generateGame("fallback", undefined, { forceFallback: true });
     expect(g.fallback).toBe(true);
     expect(g.plan.seed).toBe("fallback");
-    const added = g.plan.rules.filter((r) =>
-      NEW_CHALLENGE_IDS.has(r.definitionId),
-    );
-    expect(added.length).toBeGreaterThanOrEqual(2);
-    expect(added.length).toBeLessThanOrEqual(3);
+    expect(g.plan.rules.length).toBeGreaterThanOrEqual(15);
     expect(
       g.plan.rules.every(
         (r) =>
           validatePredicate(r.predicate, analyzePassword(g.witness)).passed,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("relative code adjacency", () => {
+  const before: Predicate = {
+    kind: "relativePosition",
+    code: "TX12",
+    side: "before",
+    category: "lower",
+  };
+  const after: Predicate = {
+    kind: "relativePosition",
+    code: "TX12",
+    side: "after",
+    category: "digit",
+  };
+  test("uses the first complete code and the adjacent grapheme", () => {
+    for (const raw of ["TX12", "TX12aTX12", "a\u0301TX12", "a TX12", "aTX12\n"])
+      expect(validatePredicate(before, analyzePassword(raw)).passed).toBe(
+        false,
+      );
+    expect(validatePredicate(before, analyzePassword("👩‍💻aTX12")).passed).toBe(
+      true,
+    );
+    expect(validatePredicate(after, analyzePassword("TX123👩‍💻")).passed).toBe(
+      true,
+    );
+    for (const raw of ["TX12", "TX12鱼3", "TX12３", "TX121️⃣"])
+      expect(validatePredicate(after, analyzePassword(raw)).passed).toBe(false);
+    expect(copy(before)).toBe("最先出现的「TX12」前紧挨着一个小写英文字母。");
+    expect(copy(after)).toContain("后紧挨着一个数字");
+  });
+  test("unrelated inserts preserve local adjacency", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom("鱼", "👩‍💻", "e\u0301", " ", "!"), {
+          maxLength: 40,
+        }),
+        (chars) => {
+          const outside = chars.join("");
+          return (
+            validatePredicate(
+              before,
+              analyzePassword(outside + "aTX123" + outside),
+            ).passed &&
+            validatePredicate(
+              after,
+              analyzePassword(outside + "aTX123" + outside),
+            ).passed
+          );
+        },
+      ),
+      { seed: 51007, numRuns: 50 },
+    );
+  });
+  test("constraint conflicts and a genuine code-preserving counterexample", () => {
+    const context = mergeConstraint(emptyContext(), before).context;
+    expect(
+      mergeConstraint(context, { ...before, category: "punctuation" }).error,
+    ).not.toBeNull();
+    expect(mergeConstraint(context, after).error).toBeNull();
+    const w = buildWitness(new SeededRandom("relative", "test"));
+    const make = (id: string, predicate: Predicate): RuleInstance => ({
+      id,
+      definitionId: id,
+      ordinal: 1,
+      family: "local",
+      phase: 2,
+      difficulty: 2,
+      copyVariant: 0,
+      reads: ["code"],
+      predicate,
+    });
+    const previous = make("code", {
+      kind: "contains",
+      options: [w.code],
+      sensitive: true,
+    });
+    for (const side of ["before", "after"] as const) {
+      const candidate = make("relative-position", {
+        kind: "relativePosition",
+        code: w.code,
+        side,
+        category: side === "before" ? "lower" : "digit",
+      });
+      expect(
+        validatePredicate(candidate.predicate, analyzePassword(w.text)).passed,
+      ).toBe(true);
+      const proof = findContribution([previous], candidate, w)!;
+      expect(proof).not.toBeNull();
+      const negative = analyzePassword(proof.counterexample);
+      expect(validatePredicate(previous.predicate, negative).passed).toBe(true);
+      expect(validatePredicate(candidate.predicate, negative).passed).toBe(
+        false,
+      );
+    }
+  });
+  test("the fixed seed corpus actually selects adjacency", () => {
+    const games = ["0", "137", "registration", "fallback"].map((seed) =>
+      generateGame(seed),
+    );
+    expect(
+      games.every((g) =>
+        g.plan.rules.some((r) => r.definitionId === "relative-position"),
       ),
     ).toBe(true);
   });

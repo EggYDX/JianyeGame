@@ -7,10 +7,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { graphemeSegments } from "unicode-segmenter/grapheme";
 import { initialState, nextGateAt, transition } from "../engine/game";
 import {
   createAssistance,
+  assistanceProgress,
   syncAssistance,
   assistanceDueAt,
   checkAssistance,
@@ -33,10 +33,10 @@ import DebugPanel, { type Inspection } from "../debug/DebugPanel";
 import { copyText } from "./clipboard";
 import { Dialog } from "./Dialog";
 import { Toast, type ToastMessage } from "./Toast";
-import { RuleRow } from "./RuleRow";
+import { AccountStep, PasswordStep } from "./GameSteps";
+import { useRuleAnimations } from "./useRuleAnimations";
 import { Icon } from "./Icon";
-const now = () => performance.now(),
-  reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const now = () => performance.now();
 type Modal = "invite" | "assistance" | "characters" | "debug" | null;
 
 export default function App() {
@@ -59,7 +59,6 @@ export default function App() {
     generation = useRef(0),
     queuedInvite = useRef<string | null>(null);
   const workerRef = useRef<Worker | null>(null),
-    accountComposing = useRef(false),
     inviteComposing = useRef(false);
   const account = useRef<HTMLInputElement>(null),
     password = useRef<HTMLTextAreaElement>(null),
@@ -70,11 +69,13 @@ export default function App() {
   const [assistance, setAssistance] = useState(() =>
     createAssistance(now(), restored.current?.inspectionEnabled === true),
   );
-  const [unseen, setUnseen] = useState(false);
-  const previousPositions = useRef(new Map<string, number>()),
-    animations = useRef(new Map<string, Animation>());
-  const priorCount = useRef(0),
-    lastFailure = useRef(0);
+  const { unseen, setUnseen } = useRuleAnimations(
+    field,
+    list,
+    state.failureSerial,
+    state.revealedCount,
+    config.sessionId,
+  );
   const notify = useCallback(
     (text: string, kind: ToastMessage["kind"] = "success") =>
       setToast({ id: ++toastId.current, text, kind }),
@@ -94,32 +95,14 @@ export default function App() {
       state.revealedCount > 0 ? evaluateRules(visibleRules, state.raw) : null,
     [visibleRules, state.raw, state.revealedCount],
   );
-  const count = useMemo(
-    () =>
-      state.raw.length > 8192
-        ? null
-        : (evaluated?.analysis.graphemes.length ??
-          [...graphemeSegments(state.raw)].length),
-    [evaluated, state.raw],
-  );
-  const ordered = visibleRules
-    .map((rule, i) => ({ rule, result: evaluated!.results[i] }))
-    .sort(
-      (a, b) =>
-        Number(a.result.passed) - Number(b.result.passed) ||
-        b.rule.ordinal - a.rule.ordinal,
-    );
-  const orderKey = ordered.map((x) => x.rule.id).join("|");
   const failing = evaluated?.results.filter((r) => !r.passed).length ?? 0;
-  let prefix = 0;
-  for (const result of evaluated?.results ?? []) {
-    if (!result.passed) break;
-    prefix++;
-  }
   const complete = state.stage === "complete";
   const editorMounted =
     state.accountConfirmed && !["initializing", "error"].includes(state.stage);
-  const progress = state.revealedCount * 257 + prefix;
+  const progress = assistanceProgress(
+    state.revealedCount,
+    evaluated?.results ?? [],
+  );
   const playing =
     editorMounted &&
     !complete &&
@@ -130,10 +113,10 @@ export default function App() {
   useEffect(() => {
     if (complete) setAnnouncement("注册完成。");
     else if (state.revealedCount > announced.current.count)
-      setAnnouncement(`新要求：${describe(visibleRules.at(-1)!.predicate)}`);
+      setAnnouncement(describe(visibleRules.at(-1)!.predicate));
     else if (failing !== announced.current.failing)
       setAnnouncement(
-        failing ? `还有 ${failing} 项要求未通过。` : "所有要求均已通过。",
+        failing ? `还有 ${failing} 处需要改一改。` : "可以继续了。",
       );
     else if (!state.revealedCount) setAnnouncement("");
     announced.current = { count: state.revealedCount, failing };
@@ -293,93 +276,6 @@ export default function App() {
     if (editorMounted && matchMedia("(pointer: fine)").matches)
       password.current?.focus({ preventScroll: true });
   }, [editorMounted]);
-  useEffect(() => {
-    if (state.failureSerial === lastFailure.current) return;
-    lastFailure.current = state.failureSerial;
-    const el = field.current;
-    if (!el) return;
-    el.getAnimations().forEach((a) => a.cancel());
-    if (!reduced())
-      el.animate(
-        [
-          { transform: "translateX(0)" },
-          { transform: "translateX(-3px)" },
-          { transform: "translateX(3px)" },
-          { transform: "translateX(-2px)" },
-          { transform: "translateX(1px)" },
-          { transform: "translateX(0)" },
-        ],
-        { duration: 230, easing: "ease-in-out" },
-      );
-    list.current
-      ?.querySelectorAll<HTMLElement>('[data-passed="false"]')
-      .forEach((row) => {
-        if (!reduced())
-          row.animate(
-            [{ borderColor: "#cf7280" }, { borderColor: "#ecd2d7" }],
-            { duration: 360 },
-          );
-      });
-  }, [state.failureSerial]);
-  useLayoutEffect(() => {
-    const el = list.current;
-    if (!el) return;
-    const top = el.getBoundingClientRect().top,
-      scroll = el.scrollTop;
-    const measurements = [...el.querySelectorAll<HTMLElement>("[data-id]")].map(
-      (node) => {
-        const id = node.dataset.id!,
-          matrix = getComputedStyle(node).transform,
-          translate = matrix === "none" ? 0 : new DOMMatrixReadOnly(matrix).m42;
-        return {
-          node,
-          id,
-          next: node.getBoundingClientRect().top - top + scroll - translate,
-          from: previousPositions.current.get(id),
-          translate,
-        };
-      },
-    );
-    if (state.revealedCount > priorCount.current && scroll > 24) {
-      const anchor = [...previousPositions.current]
-        .sort((a, b) => a[1] - b[1])
-        .find(([, y]) => y >= scroll - 3);
-      const next = anchor && measurements.find((x) => x.id === anchor[0]);
-      if (anchor && next) el.scrollTop = scroll + next.next - anchor[1];
-      setUnseen(true);
-    }
-    for (const { node, id, next, from, translate } of measurements) {
-      animations.current.get(id)?.cancel();
-      if (!reduced()) {
-        if (from !== undefined && Math.abs(from + translate - next) > 1)
-          animations.current.set(
-            id,
-            node.animate(
-              [
-                { transform: `translateY(${from + translate - next}px)` },
-                { transform: "translateY(0)" },
-              ],
-              { duration: 210, easing: "cubic-bezier(.22,1,.36,1)" },
-            ),
-          );
-        else if (from === undefined)
-          animations.current.set(
-            id,
-            node.animate(
-              [
-                { opacity: 0, transform: "translateY(-4px)" },
-                { opacity: 1, transform: "translateY(0)" },
-              ],
-              { duration: 190, easing: "cubic-bezier(.22,1,.36,1)" },
-            ),
-          );
-      }
-    }
-    previousPositions.current = new Map(
-      measurements.map((x) => [x.id, x.next]),
-    );
-    priorCount.current = state.revealedCount;
-  }, [orderKey, state.revealedCount]);
   async function copy(value: string, message: string) {
     try {
       await copyText(value);
@@ -425,9 +321,6 @@ export default function App() {
     setAcceptedInvite(false);
     setInspection(null);
     setAssistance(createAssistance(now()));
-    previousPositions.current.clear();
-    priorCount.current = 0;
-    lastFailure.current = 0;
     dispatch({ type: "new-seed", sessionId, now: now() });
     setLocationSeed(code, CONTENT_VERSION);
     setConfig({
@@ -484,53 +377,13 @@ export default function App() {
       </header>
       <main>
         {state.stage === "account" && (
-          <section className="account-form">
-            <h1>创建账号</h1>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!accountComposing.current)
-                  dispatch({
-                    type: "account",
-                    username: account.current?.value ?? "",
-                    now: now(),
-                  });
-              }}
-            >
-              <label htmlFor="account-name">账户名</label>
-              <div className="account-field" ref={field}>
-                <input
-                  ref={account}
-                  id="account-name"
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-invalid={!!state.error}
-                  aria-describedby={state.error ? "account-error" : undefined}
-                  enterKeyHint="next"
-                  onCompositionStart={() => {
-                    accountComposing.current = true;
-                  }}
-                  onCompositionEnd={() => {
-                    accountComposing.current = false;
-                  }}
-                />
-              </div>
-              {state.error && (
-                <p id="account-error" className="error-text" role="alert">
-                  {state.error}
-                </p>
-              )}
-              <div className="form-actions">
-                <button
-                  className="primary-button"
-                  type="submit"
-                  disabled={joining || !state.plan}
-                >
-                  继续
-                </button>
-              </div>
-            </form>
-          </section>
+          <AccountStep
+            state={state}
+            dispatch={dispatch}
+            joining={joining}
+            account={account}
+            field={field}
+          />
         )}
         {state.stage === "initializing" && (
           <section>
@@ -562,193 +415,24 @@ export default function App() {
           </section>
         )}
         {editorMounted && (
-          <>
-            <section className="password-form">
-              <h1>{complete ? "注册完成" : "设置密码"}</h1>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submit();
-                }}
-              >
-                <div className="field-label">
-                  <label htmlFor="proposed-password">密码</label>
-                  <button
-                    className="icon-button"
-                    aria-label="字符说明"
-                    type="button"
-                    onClick={(e) => {
-                      modalOrigin.current = e.currentTarget;
-                      setModal("characters");
-                    }}
-                  >
-                    <Icon name="help" />
-                  </button>
-                </div>
-                <div className="password-line">
-                  <div
-                    className="password-field"
-                    ref={field}
-                    data-error={
-                      !!evaluated &&
-                      (!evaluated.analysis.valid ||
-                        (state.failureSerial > 0 && failing > 0))
-                    }
-                  >
-                    <textarea
-                      ref={password}
-                      id="proposed-password"
-                      name="proposed-password"
-                      rows={1}
-                      wrap="soft"
-                      defaultValue={state.raw}
-                      readOnly={complete}
-                      autoComplete="off"
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      enterKeyHint="done"
-                      aria-invalid={
-                        evaluated
-                          ? !evaluated.analysis.valid || failing > 0
-                          : false
-                      }
-                      aria-describedby={
-                        evaluated?.analysis.formatError
-                          ? "format-error character-count"
-                          : "character-count"
-                      }
-                      onKeyDown={(e) => {
-                        if (
-                          e.key === "Enter" &&
-                          !e.nativeEvent.isComposing &&
-                          e.nativeEvent.keyCode !== 229
-                        ) {
-                          e.preventDefault();
-                          submit();
-                        }
-                      }}
-                      onInput={(e) =>
-                        dispatch({
-                          type: "input",
-                          raw: e.currentTarget.value,
-                          now: now(),
-                        })
-                      }
-                      onCompositionStart={() =>
-                        dispatch({
-                          type: "composition",
-                          active: true,
-                          now: now(),
-                        })
-                      }
-                      onCompositionEnd={(e) => {
-                        dispatch({
-                          type: "input",
-                          raw: e.currentTarget.value,
-                          now: now(),
-                        });
-                        dispatch({
-                          type: "composition",
-                          active: false,
-                          now: now(),
-                        });
-                      }}
-                    />
-                  </div>
-                  <span
-                    id="character-count"
-                    className="character-count"
-                    aria-label={count === null ? "输入过长" : `${count} 个字符`}
-                  >
-                    {count ?? "—"}
-                  </span>
-                </div>
-                {evaluated?.analysis.formatError && (
-                  <p id="format-error" className="error-text" role="status">
-                    {evaluated.analysis.formatError}
-                  </p>
-                )}
-                <div className="form-actions">
-                  {complete ? (
-                    <>
-                      <button
-                        className="text-button"
-                        type="button"
-                        onClick={() => copy(state.raw, "密码已复制")}
-                      >
-                        复制密码
-                      </button>
-                      <button
-                        className="primary-button"
-                        type="button"
-                        onClick={restart}
-                      >
-                        重新开始
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      className="primary-button"
-                      type="submit"
-                      disabled={state.composing || state.completionRequested}
-                      aria-busy={state.completionRequested}
-                    >
-                      {state.completionRequested && <Icon name="loading" />}继续
-                    </button>
-                  )}
-                </div>
-              </form>
-            </section>
-            {state.revealedCount > 0 && (
-              <section className="requirements" aria-label="密码要求">
-                {unseen && (
-                  <button
-                    className="new-rule-link text-button"
-                    onClick={() => {
-                      const latest = list.current?.querySelector<HTMLElement>(
-                        `[data-ordinal="${state.revealedCount}"]`,
-                      );
-                      list.current?.scrollTo({
-                        top: latest?.offsetTop ?? 0,
-                        behavior: reduced() ? "instant" : "smooth",
-                      });
-                      setUnseen(false);
-                    }}
-                  >
-                    查看新要求
-                  </button>
-                )}
-                <ol
-                  className="rule-list"
-                  ref={list}
-                  aria-label="密码要求"
-                  onScroll={() => {
-                    if ((list.current?.scrollTop ?? 0) < 16) setUnseen(false);
-                  }}
-                >
-                  {ordered.map(({ rule, result }) => (
-                    <RuleRow
-                      key={rule.id}
-                      rule={rule}
-                      result={result}
-                      inspectionEnabled={assistance.enabled}
-                    />
-                  ))}
-                </ol>
-              </section>
-            )}
-            {complete && (
-              <div className="finish-actions">
-                <button
-                  className="text-button"
-                  onClick={() => copy(config.seed, "邀请码已复制")}
-                >
-                  <Icon name="copy" />
-                  复制邀请码
-                </button>
-              </div>
-            )}
-          </>
+          <PasswordStep
+            state={state}
+            dispatch={dispatch}
+            evaluated={evaluated}
+            password={password}
+            field={field}
+            list={list}
+            assistanceEnabled={assistance.enabled}
+            unseen={unseen}
+            setUnseen={setUnseen}
+            onCharacters={(origin) => {
+              modalOrigin.current = origin;
+              setModal("characters");
+            }}
+            submit={submit}
+            copy={copy}
+            seed={config.seed}
+          />
         )}
         <p
           className="visually-hidden"
@@ -838,7 +522,7 @@ export default function App() {
               onClick={() => {
                 setAssistance((s) => ({ ...s, enabled: true, offered: false }));
                 setModal(null);
-                setAnnouncement("帮助已开启。");
+                setAnnouncement("可以查看详情了。");
               }}
             >
               查看详情
