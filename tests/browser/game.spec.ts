@@ -279,7 +279,7 @@ test("IME and background keep reading intervals; focus alone does not open chara
   await page.clock.runFor(10000);
   await expect(page.locator(rows)).toHaveCount(2);
   await visibility(page, "visible");
-  await page.clock.runFor(1590);
+  await page.clock.runFor(1600);
   await expect(page.locator(rows)).toHaveCount(2);
   await page.clock.runFor(20);
   await expect(page.locator(rows)).toHaveCount(3);
