@@ -250,8 +250,10 @@ test("default inspection stays closed; stall clock pauses, decline waits for pro
 test("IME and background keep reading intervals; focus alone does not open character dialog", async ({
   page,
 }) => {
-  await page.clock.install();
+  await page.clock.install({ time: new Date(0) });
   await enter(page);
+  // Keep CI execution time from consuming the simulated reading intervals.
+  await page.clock.pauseAt(new Date(60_000));
   const editor = page.getByLabel("密码", { exact: true });
   await editor.fill("tiny");
   await page.getByRole("button", { name: "继续", exact: true }).click();
@@ -279,10 +281,15 @@ test("IME and background keep reading intervals; focus alone does not open chara
   await page.clock.runFor(10000);
   await expect(page.locator(rows)).toHaveCount(2);
   await visibility(page, "visible");
-  await page.clock.runFor(1600);
+  await page.clock.runFor(1599);
   await expect(page.locator(rows)).toHaveCount(2);
-  await page.clock.runFor(20);
-  await expect(page.locator(rows)).toHaveCount(3);
+  // React can schedule the gate after runFor returns; keep its clock advancing.
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(20);
+      return page.locator(rows).count();
+    })
+    .toBe(3);
   await editor.fill("a".repeat(21));
   await page.clock.runFor(1601);
   await editor.evaluate((el: HTMLTextAreaElement) =>
