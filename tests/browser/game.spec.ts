@@ -284,6 +284,7 @@ test("IME and background keep reading intervals; focus alone does not open chara
   await page.clock.runFor(20);
   await expect(page.locator(rows)).toHaveCount(3);
   await editor.fill("a".repeat(21));
+  await page.clock.runFor(1601);
   await editor.evaluate((el: HTMLTextAreaElement) =>
     el.setSelectionRange(4, 8),
   );
